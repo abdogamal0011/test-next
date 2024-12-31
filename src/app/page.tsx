@@ -1,101 +1,152 @@
-import Image from "next/image";
+'use client';
+import { useState } from 'react';
+import './style.css';
+import { z } from 'zod';
+import { useRouter } from 'next/navigation'; // Updated import
+import { useAuthStore } from './auth';
+
+const loginSchema = z.object({
+  email: z.string().email({ message: "Invalid email format." }),
+  password: z.string().min(1, { message: "Password is required." }),
+});
+
+interface FormData {
+  email: string;
+  password: string;
+}
+
+interface Errors {
+  email?: string;
+  password?: string;
+  form?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [formData, setFormData] = useState<FormData>({ email: "", password: "" });
+  const [errors, setErrors] = useState<Errors>({});
+  const setToken = useAuthStore((state) => state.setToken);
+  const setUser = useAuthStore((state) => state.setUser);
+  const router = useRouter();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    setErrors({ ...errors, [name]: undefined }); // Clear field-specific errors
+  };
+
+  const handleLogin = async () => {
+    try {
+      // Validate input data
+      loginSchema.parse(formData);
+
+      const response = await fetch(
+        "https://api-yeshtery.dev.meetusvr.com/v1/yeshtery/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...formData, isEmployee: true }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Invalid credentials.");
+      }
+
+      const data = await response.json();
+      setToken(data.token);
+
+      const userResponse = await fetch(
+        "https://api-yeshtery.dev.meetusvr.com/v1/user/info",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.token}`,
+          },
+        }
+      );
+
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch user info.");
+      }
+
+      const userData = await userResponse.json();
+      setUser({ id: userData.id, name: userData.name });
+
+      router.push("/dashboard");
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        // Extract validation errors
+        const zodErrors = err.errors.reduce(
+          (acc: Errors, curr) => ({ ...acc, [curr.path[0] as keyof FormData]: curr.message }),
+          {}
+        );
+        setErrors(zodErrors);
+      } else if (err instanceof Error) {
+        setErrors({ form: err.message });
+      }
+    }
+  };
+
+  return (
+    <>
+      <header className="text-black h-screen flex justify-start items-center w-screen">
+        <div className="p-5 text-center w-1/2">
+          <h1 className="text-4xl">Welcome Back</h1>
+          <div className="flex justify-center items-center">
+            <p className="text-l text-gray-400 p-5 w-1/2">
+              Step into our shopping metaverse for an unforgettable shopping experience.
+            </p>
+          </div>
+          <div className="flex justify-center items-center">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleLogin();
+              }}
+              className="w-1/2 flex flex-col justify-center items-center"
+            >
+              <div className="email">
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="Enter Email"
+                  //autoComplete="email"
+                  
+                  className="mb-3 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                />
+              </div>
+                {
+                errors.email && <p style={{ color: "red" }}>{errors.email}</p>
+              }
+              <div className="password">
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Enter Password"
+                  
+                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                />
+              </div>
+                {errors.password && <p style={{ color: "red" }}>{errors.password}</p>}
+              <button
+                type="submit"
+                disabled={!formData.email || !formData.password}
+                className="btn bg-purple-500 px-10 py-2 hover:bg-purple-900 hover:text-white rounded mt-5"
+              >
+                Login
+              </button>
+            </form>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <div className="w-1/4">
+          <img src="/Group 1216257798.png" className="w-full" alt="image" />
+        </div>
+      </header>
+    </>
   );
 }
