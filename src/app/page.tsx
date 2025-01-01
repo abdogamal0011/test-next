@@ -144,7 +144,7 @@ export default function Home() {
           </div>
         </div>
         <div className="w-1/4">
-          <img src="/Group 1216257798.png" className="w-full" alt="image" />
+          <img src="./Group 1216257798.png" className="w-full" alt="image" />
         </div>
       </header>
     </>
